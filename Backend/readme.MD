@@ -235,3 +235,19 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MDA2YzY4NTEzYjdmMDc1MmE3MDFjMCIsInRpcG8iOiJjYW1pb25lcm8iLCJpYXQiOjE3NDUyNzgwMjUsImV4cCI6MTc0NTM2NDQyNX0.lN0IhSDO1gN66SjxGwu82pOuP71l6x-m7Os14n8ybdo
+
+
+  "correo": "correo@ejemplllo.com",
+  "contraseña": "contraseñaSegura",
+
+    "correo": "juan@eeexampllee.com",
+  "contraseña": "123456",
+
+
+  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MmJhMjU2MGQ3M2QzOTIzYTQ1MDhkNiIsInRpcG9Vc3VhcmlvIjoiY2FtaW9uZXJvIiwiaWF0IjoxNzQ3NjkwMDcwLCJleHAiOjE3NDc2OTM2NzB9.4X2BUV5aUjnLhiefZhhSjT91v21U0I1rRrRMLDKJ3zs
+
+Camionero
+  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MmJhMmI5MGQ3M2QzOTIzYTQ1MDhkOSIsInRpcG9Vc3VhcmlvIjoiY2FtaW9uZXJvIiwiaWF0IjoxNzQ3NjkwMTY5LCJleHAiOjE3NDc2OTM3Njl9.SP7hTJLl2KkCq0WqvBawez5Qf5dlaI4JJYN2f-gaX0s
+
+contratista
+  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4MmJhMzVjMGQ3M2QzOTIzYTQ1MDhkZSIsInRpcG9Vc3VhcmlvIjoiY29udHJhdGlzdGEiLCJpYXQiOjE3NDc2OTAzMzIsImV4cCI6MTc0NzY5MzkzMn0.9rNp_LkOuvAUANGiBWnA1A9QoG7XgIYIMi7AQqNecJM

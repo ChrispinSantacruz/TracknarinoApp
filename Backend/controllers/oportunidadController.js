@@ -2,17 +2,66 @@ const Oportunidad = require('../models/Oportunidad');
 const User = require('../models/User');
 const { enviarNotificacionFCM } = require('../services/fcmService');
 
-// Crear oportunidad (solo contratista)
+// Crear oportunidad (contratista o camionero)
 const crearOportunidad = async (req, res) => {
   try {
-    const oportunidad = new Oportunidad({
+    console.log('Datos para crear oportunidad:', req.body);
+    console.log('Usuario que intenta crear la oportunidad:', req.usuario);
+
+    // Si algunos campos no están presentes, establecer valores predeterminados
+    const datosOportunidad = {
       ...req.body,
-      contratista: req.usuario.id
-    });
+      contratista: req.usuario.id,
+      estado: 'disponible',
+      finalizada: false
+    };
+
+    console.log('Datos procesados para la oportunidad:', datosOportunidad);
+    
+    const oportunidad = new Oportunidad(datosOportunidad);
     await oportunidad.save();
-    res.status(201).json({ mensaje: 'Oportunidad creada', oportunidad });
+    
+    console.log('Oportunidad creada con éxito:', oportunidad);
+    
+    // Opcionalmente, enviar notificaciones a camioneros disponibles
+    try {
+      // Buscar camioneros disponibles (solo si quien crea es contratista)
+      if (req.usuario.tipoUsuario === 'contratista') {
+        const camioneros = await User.find({ 
+          tipoUsuario: 'camionero', 
+          deviceToken: { $exists: true, $ne: '' },
+          disponible: true 
+        });
+
+        console.log(`Enviando notificaciones a ${camioneros.length} camioneros disponibles`);
+        
+        // Enviar notificación a cada camionero
+        for (const camionero of camioneros) {
+          if (camionero.deviceToken) {
+            await enviarNotificacionFCM(
+              camionero.deviceToken, 
+              'Nueva oportunidad disponible', 
+              `${req.usuario.nombre} ha publicado una nueva carga de ${oportunidad.origen} a ${oportunidad.destino}`
+            );
+          }
+        }
+      }
+    } catch (notifError) {
+      console.error('Error al enviar notificaciones:', notifError);
+      // Continuamos aunque falle el envío de notificaciones
+    }
+    
+    res.status(201).json({ 
+      mensaje: 'Oportunidad creada', 
+      oportunidad 
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear oportunidad' });
+    console.error('Error al crear oportunidad:', error);
+    res.status(500).json({ 
+      mensaje: 'Error al crear oportunidad', 
+      error: error.message,
+      detalles: error.toString() 
+    });
   }
 };
 
@@ -27,33 +76,35 @@ const listarOportunidades = async (req, res) => {
   }
 };
 
-// Asignar camionero a oportunidad (solo contratista)
+// Asignar camionero a oportunidad (cualquier camionero puede aceptar)
 const asignarCamionero = async (req, res) => {
   try {
-    const { camioneroId } = req.body;
+    const { id } = req.params;
+    const camioneroId = req.usuario.id; // Obtener el ID del camionero desde el token de autenticación
 
-    const oportunidad = await Oportunidad.findByIdAndUpdate(
-      req.params.id,
-      {
-        camioneroAsignado: camioneroId,
-        estado: 'asignada'
-      },
-      { new: true }
-    );
+    const oportunidad = await Oportunidad.findById(id);
+
+    if (!oportunidad || oportunidad.estado !== 'disponible') {
+      return res.status(400).json({ error: 'Oportunidad no disponible para asignación' });
+    }
+
+    oportunidad.camioneroAsignado = camioneroId;
+    oportunidad.estado = 'asignada';
+    await oportunidad.save();
 
     // Enviar notificación al camionero si tiene token FCM
     const camionero = await User.findById(camioneroId);
     if (camionero?.deviceToken) {
       await enviarNotificacionFCM(
         camionero.deviceToken,
-        '📦 Nueva carga asignada',
-        `Te han asignado una carga de ${oportunidad.origen} a ${oportunidad.destino}.`
+        '📦 Nueva carga aceptada',
+        `Has aceptado una carga de ${oportunidad.origen} a ${oportunidad.destino}.`
       );
     }
 
-    res.json({ mensaje: 'Camionero asignado', oportunidad });
+    res.json({ mensaje: 'Carga aceptada', oportunidad });
   } catch (error) {
-    res.status(500).json({ error: 'Error al asignar camionero' });
+    res.status(500).json({ error: 'Error al aceptar la carga' });
   }
 };
 

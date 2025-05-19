@@ -18,7 +18,7 @@ const contratistaRoutes = require('./routes/contratistaRoutes');
 const userRoutes = require('./routes/userRoutes');
 
 // 🔐 Middleware personalizados
-const { verificarToken } = require('./middleware/authMiddleware');
+const verificarToken = require('./middleware/authMiddleware');
 const { soloRol } = require('./middleware/rolMiddleware');
 
 // 🚀 Servicios adicionales
@@ -29,8 +29,40 @@ const { enviarNotificacionFCM } = require('./services/fcmService');
 const app = express();
 
 // 🛡️ Middlewares globales
-app.use(cors());
-app.use(express.json());
+// Configuración mejorada de CORS
+app.use(cors({
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000', 
+      'http://localhost:4000',
+      'http://localhost:8000',
+      'http://localhost', 
+      'http://10.0.2.2:4000', 
+      'https://trackarino.com'
+    ];
+    
+    // Permitir solicitudes sin origen (como aplicaciones móviles)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`CORS bloqueó solicitud desde origen: ${origin}`);
+      callback(null, true); // Temporalmente permitir todos para desarrollo
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
+// Aumentar límite de peso de los JSON
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Logger middleware para desarrollo
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
 
 // 🔗 Montar rutas
 app.use('/api/auth', authRoutes);
@@ -51,8 +83,17 @@ app.get('/', (req, res) => {
   res.send('Bienvenido al backend de Tracknariño');
 });
 
+// Middleware de manejo de errores
+app.use((err, req, res, next) => {
+  console.error(`Error: ${err.message}`);
+  res.status(err.status || 500).json({
+    mensaje: err.message || 'Error interno del servidor',
+    error: process.env.NODE_ENV === 'development' ? err : {}
+  });
+});
+
 // 🔌 Conexión a MongoDB
-mongoose.connect(process.env.MONGO_URI, {
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/trackarino', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => {

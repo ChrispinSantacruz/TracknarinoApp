@@ -4,16 +4,16 @@ const { crearOportunidad, listarOportunidades, asignarCamionero, finalizarCarga 
 const verificarToken = require('../middleware/authMiddleware');
 const soloRol = require('../middleware/rolMiddleware');
 
-// Crear oportunidad (solo contratista)
-router.post('/crear', verificarToken, soloRol('contratista'), crearOportunidad);
+// Crear oportunidad (contratistas)
+router.post('/crear', verificarToken, soloRol(['contratista', 'camionero']), crearOportunidad);
 
 // Listar oportunidades disponibles (pueden verlas todos los autenticados)
 router.get('/disponibles', verificarToken, listarOportunidades);
 
-// Asignar camionero a oportunidad (solo contratista)
-router.post('/asignar/:id', verificarToken, soloRol('contratista'), asignarCamionero);
+// Asignar camionero a oportunidad (cualquier camionero puede aceptar)
+router.post('/asignar/:id', verificarToken, soloRol('camionero'), asignarCamionero);
 
-// Finalizar carga (solo contratista)
+// Finalizar una carga (solo contratista)
 router.post('/finalizar/:id', verificarToken, soloRol('contratista'), finalizarCarga);
 
 module.exports = router;

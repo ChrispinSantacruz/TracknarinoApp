@@ -18,6 +18,11 @@ router.post('/registro', async (req, res) => {
   }
 
   try {
+    // Validar que la contraseña no esté vacía
+    if (!contraseña) {
+      return res.status(400).json({ error: 'La contraseña es obligatoria' });
+    }
+
     // Verificar si el usuario ya existe
     const usuarioExistente = await User.findOne({ correo });
     if (usuarioExistente) {
