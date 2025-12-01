@@ -3,11 +3,19 @@ import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/location_service.dart';
+import '../../services/alerta_service.dart';
+import '../../services/oportunidad_service.dart';
+import '../../services/ors_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
 import '../../models/oportunidad_model.dart';
+import '../../models/alerta_model.dart';
 import '../../screens/camionero/alertas_screen.dart';
+import '../../screens/camionero/perfil_camionero_screen.dart';
+import '../../screens/camionero/oportunidades_screen.dart';
+import '../../screens/camionero/ruta_viaje_screen.dart';
+import '../../widgets/viaje_activo_banner.dart';
 import '../../utils/flutter_map_fixes.dart';
 
 class CamioneroHomeScreen extends StatefulWidget {
@@ -32,6 +40,13 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
   
   bool _isFollowingUser = true;
   final List<Oportunidad> _oportunidadesAsignadas = [];
+  List<AlertaSeguridad> _alertasCercanas = [];
+  bool _isDisponible = false;
+  
+  // Viaje activo
+  Oportunidad? _viajeActivo;
+  List<LatLng> _rutaActiva = [];
+  bool _cargandoRuta = false;
 
   @override
   void initState() {
@@ -39,9 +54,116 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
     _initLocationTracking();
     _cargarOportunidades();
     _initializeLocation();
+    _cargarEstadoDisponible();
+    _cargarAlertasCercanas();
+    _cargarViajeActivo(); // Cargar viaje activo al iniciar
     
     // Coordenadas simuladas para pruebas (Pasto - Nariño)
     _destinoPosition = LatLng(1.2136, -77.2811);
+  }
+
+  // Cargar viaje activo del camionero
+  Future<void> _cargarViajeActivo() async {
+    try {
+      final viajeActivo = await OportunidadService.obtenerViajeActivo();
+      
+      if (viajeActivo != null && mounted) {
+        setState(() {
+          _viajeActivo = viajeActivo;
+        });
+        
+        // Si hay viaje activo, cargar la ruta
+        await _cargarRutaActiva(viajeActivo);
+      }
+    } catch (e) {
+      debugPrint('Error al cargar viaje activo: $e');
+    }
+  }
+
+  // Cargar ruta del viaje activo
+  Future<void> _cargarRutaActiva(Oportunidad oportunidad) async {
+    setState(() {
+      _cargandoRuta = true;
+    });
+
+    try {
+      final position = await _locationService.getCurrentLocation();
+      if (position == null) return;
+
+      final origen = LatLng(position.latitude, position.longitude);
+      final destino = _getDestinationCoordinates(oportunidad.destino);
+
+      final routeData = await ORSService.obtenerRuta(origen, destino);
+      
+      if (mounted) {
+        setState(() {
+          _rutaActiva = routeData['coordinates'] as List<LatLng>;
+          _destinoPosition = destino;
+          _cargandoRuta = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar ruta activa: $e');
+      setState(() {
+        _cargandoRuta = false;
+      });
+    }
+  }
+
+  LatLng _getDestinationCoordinates(String destination) {
+    // Coordenadas de ciudades de Nariño y Colombia
+    final Map<String, LatLng> ciudades = {
+      // Nariño (departamento)
+      'Pasto': LatLng(1.2136, -77.2811),
+      'Ipiales': LatLng(0.8292, -77.6419),
+      'Tumaco': LatLng(1.8014, -78.7653),
+      'Túquerres': LatLng(1.0869, -77.6169),
+      'Samaniego': LatLng(1.3381, -77.5947),
+      'La Unión': LatLng(1.6011, -77.1311),
+      'Sandoná': LatLng(1.2839, -77.4686),
+      'Buesaco': LatLng(1.3847, -77.1639),
+      'La Florida': LatLng(1.3419, -77.4144),
+      // Otras ciudades cercanas
+      'Cali': LatLng(3.4516, -76.5320),
+      'Popayán': LatLng(2.4419, -76.6063),
+      'Bogotá': LatLng(4.7110, -74.0721),
+    };
+
+    // Buscar coincidencia parcial
+    for (var entry in ciudades.entries) {
+      if (destination.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
+    }
+
+    // Si no encuentra, usar Cali por defecto
+    return ciudades['Cali']!;
+  }
+
+  // Cargar estado disponible guardado
+  Future<void> _cargarEstadoDisponible() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final disponible = await authService.obtenerEstadoDisponible();
+    setState(() {
+      _isDisponible = disponible;
+    });
+  }
+
+  // Cargar alertas cercanas para mostrar en el mapa
+  Future<void> _cargarAlertasCercanas() async {
+    try {
+      final position = await _locationService.getCurrentLocation();
+      if (position != null) {
+        final alertas = await AlertaService.obtenerAlertasCercanas(position);
+        if (mounted) {
+          setState(() {
+            _alertasCercanas = alertas;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error al cargar alertas cercanas: $e');
+    }
   }
 
   // Iniciar el seguimiento de ubicación
@@ -81,10 +203,14 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
       final position = await _locationService.getCurrentLocation();
       
       if (position != null && mounted) {
+        final newLocation = LatLng(position.latitude, position.longitude);
         setState(() {
-          _currentPosition = LatLng(position.latitude, position.longitude);
+          _currentPosition = newLocation;
           _isLoading = false;
         });
+        
+        // Hacer zoom inicial a ubicación actual (estilo Uber)
+        _mapController.move(newLocation, 16.0);
       }
       
       // Suscribirse a actualizaciones de posición
@@ -139,18 +265,20 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                // Mostrar mapa solo en la pantalla de inicio
-                if (_selectedIndex == 0) _buildMap(),
-                // Mostrar lista de oportunidades
-                if (_selectedIndex == 1) _buildOportunidadesList(),
-                // Mostrar alertas
-                if (_selectedIndex == 2) _buildAlertas(),
-                // Panel de estado
-                _buildStatusPanel(),
-              ],
-            ),
+          : _selectedIndex == 3
+              ? PerfilCamioneroScreen(usuario: widget.usuario)
+              : Stack(
+                  children: [
+                    // Mostrar mapa solo en la pantalla de inicio
+                    if (_selectedIndex == 0) _buildMap(),
+                    // Mostrar lista de oportunidades
+                    if (_selectedIndex == 1) _buildOportunidadesList(),
+                    // Mostrar alertas
+                    if (_selectedIndex == 2) _buildAlertas(),
+                    // Panel de estado
+                    if (_selectedIndex != 3) _buildStatusPanel(),
+                  ],
+                ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
@@ -182,93 +310,165 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
   }
 
   Widget _buildMap() {
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        center: _currentPosition ?? LatLng(1.2053, -77.2886),
-        zoom: 13.0,
-        onPositionChanged: (position, hasGesture) {
-          if (hasGesture) {
-            setState(() {
-              _isFollowingUser = false;
-            });
-          }
-        },
-      ),
+    return Stack(
       children: [
-        TileLayer(
-          urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          subdomains: const ['a', 'b', 'c'],
-        ),
-        MarkerLayer(
-          markers: [
-            if (_currentPosition != null)
-              Marker(
-                width: 40.0,
-                height: 40.0,
-                point: _currentPosition!,
-                builder: (ctx) => Icon(
-                  Icons.location_on,
-                  color: Colors.blue,
-                  size: 40,
-                ),
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            center: _currentPosition ?? LatLng(1.2053, -77.2886),
+            zoom: 16.0,
+            onPositionChanged: (position, hasGesture) {
+              if (hasGesture) {
+                setState(() {
+                  _isFollowingUser = false;
+                });
+              }
+            },
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              subdomains: const ['a', 'b', 'c'],
+            ),
+            // Polyline de la ruta activa
+            if (_rutaActiva.isNotEmpty)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _rutaActiva,
+                    strokeWidth: 4.0,
+                    color: Colors.blue,
+                  ),
+                ],
               ),
-            if (_destinoPosition != null)
-              Marker(
-                width: 40.0,
-                height: 40.0,
-                point: _destinoPosition!,
-                builder: (ctx) => Icon(
-                  Icons.flag,
-                  color: Colors.red,
-                  size: 40,
-                ),
-              ),
+            MarkerLayer(
+              markers: [
+                if (_currentPosition != null)
+                  Marker(
+                    width: 40.0,
+                    height: 40.0,
+                    point: _currentPosition!,
+                    builder: (ctx) => const Icon(
+                      Icons.location_on,
+                      color: Colors.blue,
+                      size: 40,
+                    ),
+                  ),
+                if (_destinoPosition != null)
+                  Marker(
+                    width: 40.0,
+                    height: 40.0,
+                    point: _destinoPosition!,
+                    builder: (ctx) => const Icon(
+                      Icons.flag,
+                      color: Colors.red,
+                      size: 40,
+                    ),
+                  ),
+                // Marcadores de alertas cercanas
+                ..._alertasCercanas.map((alerta) => Marker(
+                  width: 50.0,
+                  height: 50.0,
+                  point: LatLng(
+                    alerta.coords['lat']!,
+                    alerta.coords['lng']!,
+                  ),
+                  builder: (ctx) => GestureDetector(
+                    onTap: () {
+                      _mostrarDetalleAlerta(alerta);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _getColorTipoAlerta(alerta.tipo),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: Icon(
+                        _getIconoTipoAlerta(alerta.tipo),
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                )),
+              ],
+            ),
           ],
         ),
+        // Controles del mapa
+        Positioned(
+          right: 16,
+          bottom: 150,
+          child: Column(
+            children: [
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'zoom_in_home',
+                onPressed: () {
+                  _mapController.move(
+                    _mapController.center,
+                    _mapController.zoom + 1.0,
+                  );
+                },
+                child: const Icon(Icons.add),
+                tooltip: 'Acercar',
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'zoom_out_home',
+                onPressed: () {
+                  _mapController.move(
+                    _mapController.center,
+                    _mapController.zoom - 1.0,
+                  );
+                },
+                child: const Icon(Icons.remove),
+                tooltip: 'Alejar',
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton(
+                mini: true,
+                heroTag: 'my_location_home',
+                onPressed: _toggleFollowUser,
+                backgroundColor: _isFollowingUser ? Colors.blue : Colors.grey,
+                child: const Icon(Icons.my_location),
+                tooltip: 'Mi ubicación',
+              ),
+            ],
+          ),
+        ),
+        
+        // Banner de viaje activo (si existe) - solo en pantalla de inicio
+        if (_viajeActivo != null && _selectedIndex == 0)
+          Positioned(
+            top: 16,
+            left: 0,
+            right: 0,
+            child: ViajeActivoBanner(
+              viajeActivo: _viajeActivo!,
+              onIniciarViaje: () async {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RutaViajeScreen(oportunidad: _viajeActivo!),
+                  ),
+                ).then((_) {
+                  // Recargar viaje activo al volver
+                  _cargarViajeActivo();
+                });
+              },
+              onVerRuta: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RutaViajeScreen(oportunidad: _viajeActivo!),
+                  ),
+                );
+              },
+            ),
+          ),
       ],
-    );
-  }
-
-  Widget _buildControls() {
-    return Positioned(
-      right: 16,
-      bottom: 200,
-      child: Column(
-        children: [
-          FloatingActionButton(
-            heroTag: 'zoom_in',
-            onPressed: () {
-              _mapController.move(
-                _mapController.center, 
-                _mapController.zoom + 1.0
-              );
-            },
-            mini: true,
-            child: const Icon(Icons.add),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'zoom_out',
-            onPressed: () {
-              _mapController.move(
-                _mapController.center, 
-                _mapController.zoom - 1.0
-              );
-            },
-            mini: true,
-            child: const Icon(Icons.remove),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'my_location',
-            onPressed: _toggleFollowUser,
-            mini: true,
-            backgroundColor: _isFollowingUser ? Colors.blue : Colors.grey,
-            child: const Icon(Icons.my_location),
-          ),
-        ],
-      ),
     );
   }
 
@@ -326,7 +526,93 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
     );
   }
   
+  // Obtener color según tipo de alerta
+  Color _getColorTipoAlerta(String tipo) {
+    switch (tipo) {
+      case 'trancon':
+        return Colors.orange;
+      case 'obstaculo':
+        return Colors.yellow.shade700;
+      case 'sospecha':
+      case 'intento_robo':
+        return Colors.red;
+      case 'policia':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // Obtener icono según tipo de alerta
+  IconData _getIconoTipoAlerta(String tipo) {
+    switch (tipo) {
+      case 'trancon':
+        return Icons.traffic; // 🚗 Tráfico
+      case 'sospecha':
+        return Icons.remove_red_eye; // 👁️ Actividad sospechosa
+      case 'intento_robo':
+        return Icons.warning; // ⚠️ Intento de robo
+      case 'robo':
+        return Icons.dangerous; // ❄️ Robo
+      case 'obstaculo':
+        return Icons.report_problem; // 🛑 Obstáculo
+      case 'clima_adverso':
+        return Icons.cloud; // ☁️ Clima adverso
+      case 'accidente':
+        return Icons.car_crash; // 🚗💥 Accidente
+      case 'policia':
+      case 'control_policial':
+        return Icons.local_police; // 🚪 Control policial
+      default:
+        return Icons.info; // ℹ️ Otro
+    }
+  }
+
+  // Mostrar detalle de alerta
+  void _mostrarDetalleAlerta(AlertaSeguridad alerta) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(alerta.tipo.toUpperCase()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(alerta.descripcion ?? 'Sin descripción'),
+            const SizedBox(height: 8),
+            Text(
+              'Hace ${_calcularTiempoTranscurrido(alerta.timestamp)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Calcular tiempo transcurrido
+  String _calcularTiempoTranscurrido(DateTime timestamp) {
+    final diferencia = DateTime.now().difference(timestamp);
+    if (diferencia.inMinutes < 60) {
+      return '${diferencia.inMinutes} min';
+    } else if (diferencia.inHours < 24) {
+      return '${diferencia.inHours} h';
+    } else {
+      return '${diferencia.inDays} d';
+    }
+  }
+
   Widget _buildStatusPanel() {
+    // Verificar si hay viaje activo
+    final bool tieneOportunidadActiva = _viajeActivo != null;
+    final bool enRuta = _viajeActivo?.estado == 'en_ruta';
+    
     return Positioned(
       left: 0,
       right: 0,
@@ -353,35 +639,59 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: enRuta ? Colors.green : (tieneOportunidadActiva ? Colors.orange : (_isDisponible ? Colors.blue : Colors.grey)),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              enRuta ? 'En ruta' : (tieneOportunidadActiva ? 'Viaje asignado' : (_isDisponible ? 'Disponible' : 'No disponible')),
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                            ),
                           ),
-                          child: const Text(
-                            'En ruta',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Tiempo estimado:',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      '45 minutos restantes',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ],
+                          if (!tieneOportunidadActiva) ...[
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: _isDisponible,
+                              onChanged: (value) async {
+                                setState(() {
+                                  _isDisponible = value;
+                                });
+                                final authService = Provider.of<AuthService>(context, listen: false);
+                                await authService.guardarEstadoDisponible(value);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        value ? 'Ahora estás disponible para oportunidades' : 'Marcado como no disponible'
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        tieneOportunidadActiva 
+                          ? (_viajeActivo!.origen + ' → ' + _viajeActivo!.destino)
+                          : 'Sin viaje asignado',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -449,33 +759,7 @@ class _CamioneroHomeScreenState extends State<CamioneroHomeScreen> {
 
   // Método para construir la lista de oportunidades
   Widget _buildOportunidadesList() {
-    return ListView.builder(
-      itemCount: _oportunidadesAsignadas.length,
-      itemBuilder: (context, index) {
-        final oportunidad = _oportunidadesAsignadas[index];
-        return ListTile(
-          title: Text(oportunidad.titulo),
-          subtitle: Text('De ${oportunidad.origen} a ${oportunidad.destino}'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(Icons.check, color: Colors.green),
-                onPressed: () {
-                  // Lógica para aceptar la oportunidad
-                },
-              ),
-              IconButton(
-                icon: Icon(Icons.close, color: Colors.red),
-                onPressed: () {
-                  // Lógica para rechazar la oportunidad
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    return const OportunidadesScreen();
   }
 
   // Método para construir la lista de alertas

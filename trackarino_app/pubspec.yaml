@@ -49,6 +49,7 @@ dependencies:
   firebase_messaging: ^14.7.20
   firebase_core: ^2.25.4
   flutter_svg: ^1.1.6
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +77,7 @@ flutter:
   assets:
     - assets/
     - assets/images/
+    - assets/logo.png
     - assets/images/vehicle_top.svg
     - assets/images/vehicle_top.png
     - assets/images/default_profile.png

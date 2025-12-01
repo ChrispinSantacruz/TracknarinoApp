@@ -137,9 +137,125 @@ const finalizarCarga = async (req, res) => {
   }
 };
 
+// Aceptar oportunidad (verifica estado del camionero)
+const aceptarOportunidad = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const camioneroId = req.usuario.id;
+
+    // Verificar que el camionero no tenga viajes activos
+    const viajeActivo = await Oportunidad.findOne({
+      camioneroAsignado: camioneroId,
+      estado: { $in: ['asignada', 'en_ruta'] }
+    });
+
+    if (viajeActivo) {
+      return res.status(400).json({ 
+        error: 'Ya tienes un viaje activo. Finaliza tu viaje actual antes de aceptar otra carga.',
+        viajeActivo 
+      });
+    }
+
+    const oportunidad = await Oportunidad.findById(id);
+
+    if (!oportunidad) {
+      return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    }
+
+    if (oportunidad.estado !== 'disponible') {
+      return res.status(400).json({ error: 'Esta oportunidad ya fue aceptada por otro camionero' });
+    }
+
+    // Actualizar estado de la oportunidad
+    oportunidad.camioneroAsignado = camioneroId;
+    oportunidad.estado = 'asignada';
+    await oportunidad.save();
+
+    // Poblar datos del camionero y contratista
+    await oportunidad.populate('camioneroAsignado', 'nombre correo telefono');
+    await oportunidad.populate('contratista', 'nombre correo');
+
+    // Notificación al contratista
+    const contratista = await User.findById(oportunidad.contratista);
+    if (contratista?.deviceToken) {
+      const camionero = await User.findById(camioneroId);
+      await enviarNotificacionFCM(
+        contratista.deviceToken,
+        '✅ Carga aceptada',
+        `${camionero.nombre} ha aceptado tu carga de ${oportunidad.origen} a ${oportunidad.destino}.`
+      );
+    }
+
+    res.json({ mensaje: 'Carga aceptada exitosamente', oportunidad });
+  } catch (error) {
+    console.error('Error al aceptar oportunidad:', error);
+    res.status(500).json({ error: 'Error al aceptar la carga' });
+  }
+};
+
+// Obtener viaje activo del camionero
+const obtenerViajeActivo = async (req, res) => {
+  try {
+    const camioneroId = req.usuario.id;
+
+    const viajeActivo = await Oportunidad.findOne({
+      camioneroAsignado: camioneroId,
+      estado: { $in: ['asignada', 'en_ruta'] }
+    })
+    .populate('contratista', 'nombre correo telefono')
+    .populate('camioneroAsignado', 'nombre correo');
+
+    if (!viajeActivo) {
+      return res.json({ viajeActivo: null });
+    }
+
+    res.json({ viajeActivo });
+  } catch (error) {
+    console.error('Error al obtener viaje activo:', error);
+    res.status(500).json({ error: 'Error al obtener viaje activo' });
+  }
+};
+
+// Iniciar viaje (cambiar estado a en_ruta)
+const iniciarViaje = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const camioneroId = req.usuario.id;
+
+    const oportunidad = await Oportunidad.findById(id);
+
+    if (!oportunidad) {
+      return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    }
+
+    if (oportunidad.camioneroAsignado.toString() !== camioneroId) {
+      return res.status(403).json({ error: 'No tienes permisos para iniciar este viaje' });
+    }
+
+    // Permitir iniciar si está asignada o ya en ruta (por si se refresca la app)
+    if (oportunidad.estado !== 'asignada' && oportunidad.estado !== 'en_ruta') {
+      return res.status(400).json({ error: 'Este viaje no está en estado válido para iniciar' });
+    }
+
+    // Si ya está en ruta, simplemente confirmar sin cambiar nada
+    if (oportunidad.estado !== 'en_ruta') {
+      oportunidad.estado = 'en_ruta';
+      await oportunidad.save();
+    }
+
+    res.json({ mensaje: 'Viaje iniciado', oportunidad });
+  } catch (error) {
+    console.error('Error al iniciar viaje:', error);
+    res.status(500).json({ error: 'Error al iniciar viaje' });
+  }
+};
+
 module.exports = {
   crearOportunidad,
   listarOportunidades,
   asignarCamionero,
-  finalizarCarga
+  finalizarCarga,
+  aceptarOportunidad,
+  obtenerViajeActivo,
+  iniciarViaje
 };

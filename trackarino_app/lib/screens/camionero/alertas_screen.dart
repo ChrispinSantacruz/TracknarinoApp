@@ -124,12 +124,15 @@ class _AlertasScreenState extends State<AlertasScreen> with SingleTickerProvider
         setState(() {
           _errorMessage = 'No se pudo obtener tu ubicación actual';
           _isLoading = false;
+          _alertas = [];
         });
       }
     } catch (e) {
+      debugPrint('Error al cargar alertas: $e');
       setState(() {
-        _errorMessage = 'Error al cargar alertas: $e';
+        _errorMessage = 'Error al cargar alertas. Verifica tu conexión.';
         _isLoading = false;
+        _alertas = [];
       });
     }
   }
@@ -354,9 +357,29 @@ class _AlertasScreenState extends State<AlertasScreen> with SingleTickerProvider
               ),
             ),
             title: Text(tipoAlerta?['titulo'] as String? ?? 'Alerta'),
-            subtitle: alerta.descripcion != null 
-                ? Text(alerta.descripcion!) 
-                : Text(tipoAlerta?['descripcion'] as String? ?? ''),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  alerta.descripcion != null 
+                      ? alerta.descripcion! 
+                      : tipoAlerta?['descripcion'] as String? ?? ''
+                ),
+                if (alerta.imagenUrl != null && alerta.imagenUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.photo, size: 14, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Con imagen',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
             trailing: Text(
               _formatTimeDifference(alerta.timestamp),
               style: const TextStyle(fontSize: 12),
@@ -375,6 +398,7 @@ class _AlertasScreenState extends State<AlertasScreen> with SingleTickerProvider
   
   Widget _buildCrearAlertaTab() {
     final ubicacion = _selectedLocation ?? LatLng(1.2136, -77.2811);
+    final MapController mapController = MapController();
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -396,45 +420,116 @@ class _AlertasScreenState extends State<AlertasScreen> with SingleTickerProvider
           
           const SizedBox(height: 16),
           
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: FlutterMap(
-                options: MapOptions(
-                  center: ubicacion,
-                  zoom: 15.0,
-                  onTap: (_, point) => _onMapTap(point),
+          Stack(
+            children: [
+              Container(
+                height: 250,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                    subdomains: const ['a', 'b', 'c'],
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        width: 40.0,
-                        height: 40.0,
-                        point: ubicacion,
-                        builder: (ctx) => Icon(
-                          Icons.location_on,
-                          color: Colors.red,
-                          size: 40,
-                        ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: FlutterMap(
+                    mapController: mapController,
+                    options: MapOptions(
+                      center: ubicacion,
+                      zoom: 15.0,
+                      onTap: (_, point) => _onMapTap(point),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        subdomains: const ['a', 'b', 'c'],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            width: 40.0,
+                            height: 40.0,
+                            point: ubicacion,
+                            builder: (ctx) => const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 40,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
+              
+              // Controles del mapa
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Column(
+                  children: [
+                    // Botón ubicación actual
+                    FloatingActionButton(
+                      mini: true,
+                      heroTag: 'my_location_alert',
+                      onPressed: () async {
+                        await _cargarUbicacionActual();
+                        if (_selectedLocation != null) {
+                          mapController.move(_selectedLocation!, 15.0);
+                        }
+                      },
+                      child: const Icon(Icons.my_location),
+                      tooltip: 'Mi ubicación',
+                    ),
+                    const SizedBox(height: 4),
+                    // Botón zoom in
+                    FloatingActionButton(
+                      mini: true,
+                      heroTag: 'zoom_in_alert',
+                      onPressed: () {
+                        mapController.move(
+                          mapController.center,
+                          mapController.zoom + 1.0,
+                        );
+                      },
+                      child: const Icon(Icons.add),
+                      tooltip: 'Acercar',
+                    ),
+                    const SizedBox(height: 4),
+                    // Botón zoom out
+                    FloatingActionButton(
+                      mini: true,
+                      heroTag: 'zoom_out_alert',
+                      onPressed: () {
+                        mapController.move(
+                          mapController.center,
+                          mapController.zoom - 1.0,
+                        );
+                      },
+                      child: const Icon(Icons.remove),
+                      tooltip: 'Alejar',
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          
+          ElevatedButton.icon(
+            onPressed: () async {
+              await _cargarUbicacionActual();
+              if (_selectedLocation != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Ubicación actual marcada')),
+                );
+              }
+            },
+            icon: const Icon(Icons.my_location),
+            label: const Text('Usar ubicación actual'),
+          ),
+          
+          const SizedBox(height: 8),
           
           Text(
             'Ubicación seleccionada: ${_selectedLocation != null ? '${_selectedLocation!.latitude.toStringAsFixed(4)}, ${_selectedLocation!.longitude.toStringAsFixed(4)}' : 'Ninguna'}',
@@ -486,36 +581,23 @@ class _AlertasScreenState extends State<AlertasScreen> with SingleTickerProvider
                 child: OutlinedButton.icon(
                   onPressed: _pickImage,
                   icon: const Icon(Icons.camera_alt),
-                  label: const Text('Tomar foto'),
+                  label: const Text('Tomar foto (opcional)'),
                 ),
               ),
-              if (_selectedImage != null) ...[
-                const SizedBox(width: 16),
-                Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(_selectedImage!, fit: BoxFit.cover),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.cancel, color: Colors.red),
-                      onPressed: () => setState(() => _selectedImage = null),
-                      iconSize: 20,
-                    ),
-                  ],
-                ),
-              ],
             ],
           ),
+          
+          if (_selectedImage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Foto seleccionada: ${_selectedImage!.path.split('/').last}',
+                style: const TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.green,
+                ),
+              ),
+            ),
           
           const SizedBox(height: 16),
           

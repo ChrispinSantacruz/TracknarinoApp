@@ -6,7 +6,9 @@ const soloRol = require('../middleware/rolMiddleware');
 
 // 📍 Camionero actualiza su ubicación
 router.post('/actualizar', verificarToken, soloRol('camionero'), async (req, res) => {
-  const { lat, lng } = req.body;
+  // Aceptar tanto lat/lng como latitud/longitud
+  const lat = req.body.lat || req.body.latitud;
+  const lng = req.body.lng || req.body.longitud;
 
   if (!lat || !lng) return res.status(400).json({ error: 'Latitud y longitud son obligatorios' });
 

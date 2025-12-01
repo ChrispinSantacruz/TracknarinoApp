@@ -27,12 +27,18 @@ class AlertaService {
       }
       
       final response = await ApiService.post(ApiConfig.alertas, data);
-      return AlertaSeguridad.fromJson(response);
+      
+      // El backend responde con {mensaje: '...', alerta: {...}}
+      // Necesitamos extraer solo el objeto 'alerta'
+      if (response is Map<String, dynamic> && response.containsKey('alerta')) {
+        return AlertaSeguridad.fromJson(response['alerta']);
+      } else {
+        // Si la respuesta no tiene la estructura esperada, intentar parsear directamente
+        return AlertaSeguridad.fromJson(response);
+      }
     } catch (e) {
       print('Error al crear alerta: $e');
-      
-      // Simular respuesta para desarrollo
-      return _simularCreacionAlerta(tipo, coords, descripcion);
+      rethrow;
     }
   }
 
@@ -42,7 +48,7 @@ class AlertaService {
       final data = {
         'lat': position.latitude,
         'lng': position.longitude,
-        'radio': 10000, // 10 km de radio para buscar alertas
+        'radio': 50000, // 50 km de radio para buscar alertas
       };
       
       final response = await ApiService.post(
@@ -50,14 +56,13 @@ class AlertaService {
         data,
       );
       
-      final List<dynamic> alertasData = response['alertas'];
-      return alertasData
+      // La respuesta es directamente un array de alertas
+      return (response as List)
           .map((data) => AlertaSeguridad.fromJson(data))
           .toList();
     } catch (e) {
       print('Error al obtener alertas cercanas: $e');
-      // Simular datos para desarrollo
-      return _generarAlertasSimuladas(position);
+      rethrow;
     }
   }
 

@@ -39,8 +39,7 @@ class OportunidadService {
           .toList();
     } catch (e) {
       print('Error al obtener oportunidades: $e');
-      // Generar datos simulados para desarrollo
-      return _generarOportunidadesSimuladas();
+      rethrow;
     }
   }
 
@@ -251,6 +250,52 @@ class OportunidadService {
     } catch (e) {
       print('Error al finalizar carga: $e');
       return false;
+    }
+  }
+
+  /// Aceptar una oportunidad (nuevo método con validaciones)
+  static Future<Oportunidad> aceptarOportunidad(String oportunidadId) async {
+    try {
+      final response = await ApiService.put(
+        '${ApiConfig.oportunidades}/$oportunidadId/aceptar',
+        {},
+      );
+      
+      return Oportunidad.fromJson(response['oportunidad']);
+    } catch (e) {
+      print('Error al aceptar oportunidad: $e');
+      rethrow;
+    }
+  }
+
+  /// Obtener viaje activo del camionero
+  static Future<Oportunidad?> obtenerViajeActivo() async {
+    try {
+      final response = await ApiService.get('${ApiConfig.oportunidades}/viaje-activo');
+      
+      if (response['viajeActivo'] == null) {
+        return null;
+      }
+      
+      return Oportunidad.fromJson(response['viajeActivo']);
+    } catch (e) {
+      print('Error al obtener viaje activo: $e');
+      return null;
+    }
+  }
+
+  /// Iniciar viaje
+  static Future<Oportunidad> iniciarViaje(String oportunidadId) async {
+    try {
+      final response = await ApiService.put(
+        '${ApiConfig.oportunidades}/$oportunidadId/iniciar',
+        {},
+      );
+      
+      return Oportunidad.fromJson(response['oportunidad']);
+    } catch (e) {
+      print('Error al iniciar viaje: $e');
+      rethrow;
     }
   }
 } 

@@ -64,15 +64,33 @@ class LocationService extends ChangeNotifier {
     if (!hasPermission) return null;
 
     try {
+      // Usar la mejor precisión posible
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
+        desiredAccuracy: LocationAccuracy.best,
+        timeLimit: const Duration(seconds: 10),
       );
+      
+      debugPrint('📍 Ubicación obtenida: ${position.latitude}, ${position.longitude}');
+      debugPrint('   Precisión: ${position.accuracy}m');
+      
       _currentPosition = position;
       notifyListeners();
       return position;
     } catch (e) {
-      print('Error al obtener ubicación: $e');
-      return null;
+      debugPrint('❌ Error al obtener ubicación: $e');
+      
+      // Intentar con precisión media si falla
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        _currentPosition = position;
+        notifyListeners();
+        return position;
+      } catch (e2) {
+        debugPrint('❌ Error al obtener ubicación (intento 2): $e2');
+        return null;
+      }
     }
   }
 
@@ -84,19 +102,21 @@ class LocationService extends ChangeNotifier {
     if (!hasPermission) return;
 
     try {
+      // Configuración optimizada para mejor precisión
       const locationSettings = LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10, // Actualizar cada 10 metros de distancia
-        timeLimit: Duration(seconds: 15), // Máximo cada 15 segundos
+        accuracy: LocationAccuracy.best, // Mejor precisión posible
+        distanceFilter: 5, // Actualizar cada 5 metros de distancia
+        timeLimit: Duration(seconds: 10), // Máximo cada 10 segundos
       );
 
       _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings)
           .listen(_updatePosition);
       
       _isTracking = true;
+      debugPrint('✅ Tracking de ubicación iniciado');
       notifyListeners();
     } catch (e) {
-      print('Error al iniciar tracking: $e');
+      debugPrint('❌ Error al iniciar tracking: $e');
     }
   }
 

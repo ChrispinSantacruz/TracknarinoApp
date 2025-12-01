@@ -271,4 +271,32 @@ class AuthService extends ChangeNotifier {
       return null;
     }
   }
+
+  // Guardar estado disponible
+  Future<void> guardarEstadoDisponible(bool disponible) async {
+    try {
+      await _storage.write(key: 'estado_disponible', value: disponible.toString());
+      if (kDebugMode) {
+        print('Estado disponible guardado: $disponible');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error al guardar estado disponible: $e');
+      }
+    }
+  }
+
+  // Recuperar estado disponible
+  Future<bool> obtenerEstadoDisponible() async {
+    try {
+      final estadoString = await _storage.read(key: 'estado_disponible');
+      if (estadoString == null) return false;
+      return estadoString == 'true';
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error al obtener estado disponible: $e');
+      }
+      return false;
+    }
+  }
 } 

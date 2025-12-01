@@ -9,7 +9,7 @@ const oportunidadSchema = new mongoose.Schema({
   precio: { type: Number, required: true },
   estado: {
     type: String,
-    enum: ['disponible', 'asignada', 'finalizada'],
+    enum: ['disponible', 'asignada', 'en_ruta', 'finalizada'],
     default: 'disponible'
   },
   finalizada: {

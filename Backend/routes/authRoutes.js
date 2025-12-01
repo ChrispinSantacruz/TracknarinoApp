@@ -5,8 +5,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const verificarToken = require('../middleware/authMiddleware');
 
-// Registro de un nuevo usuario
-router.post('/registro', async (req, res) => {
+// Handler de registro reutilizable (acepta '/registro' y '/register')
+async function handleRegistro(req, res) {
   const { nombre, correo, contraseña, tipoUsuario, telefono, empresa, empresaAfiliada, licenciaExpedicion, numeroCedula, camion, metodoPago, disponibleParaSolicitarCamioneros } = req.body;
 
   // Validación de campos según tipo de usuario
@@ -44,7 +44,7 @@ router.post('/registro', async (req, res) => {
       licenciaExpedicion,
       numeroCedula,
       camion,
-      metodoPago,  // Método de pago
+      metodoPago,
       disponibleParaSolicitarCamioneros
     });
 
@@ -61,10 +61,14 @@ router.post('/registro', async (req, res) => {
     });
   } catch (error) {
     // Log de error para diagnóstico
-    console.log('Error al registrar usuario:', error);  // Ver qué está causando el error 500
+    console.log('Error al registrar usuario:', error);
     res.status(500).json({ error: 'Error al registrar usuario', details: error.message });
   }
-});
+}
+
+// Registro de un nuevo usuario (rutas en español e inglés)
+router.post('/registro', handleRegistro);
+router.post('/register', handleRegistro);
 
 // Login de un usuario
 router.post('/login', async (req, res) => {

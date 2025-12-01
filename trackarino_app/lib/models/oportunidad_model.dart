@@ -44,6 +44,26 @@ class Oportunidad {
   });
 
   factory Oportunidad.fromJson(Map<String, dynamic> json) {
+    // Extraer contratista (puede ser String o Map)
+    String contratistaId;
+    if (json['contratista'] is String) {
+      contratistaId = json['contratista'];
+    } else if (json['contratista'] is Map) {
+      contratistaId = json['contratista']['_id'] ?? json['contratista']['id'] ?? 'desconocido';
+    } else {
+      contratistaId = 'desconocido';
+    }
+
+    // Extraer camioneroAsignado (puede ser String, Map o null)
+    String? camioneroId;
+    if (json['camioneroAsignado'] == null) {
+      camioneroId = null;
+    } else if (json['camioneroAsignado'] is String) {
+      camioneroId = json['camioneroAsignado'];
+    } else if (json['camioneroAsignado'] is Map) {
+      camioneroId = json['camioneroAsignado']['_id'] ?? json['camioneroAsignado']['id'];
+    }
+
     return Oportunidad(
       id: json['_id'],
       titulo: json['titulo'],
@@ -53,11 +73,11 @@ class Oportunidad {
       direccionCargue: json['direccionCargue'],
       direccionDescargue: json['direccionDescargue'],
       fecha: DateTime.parse(json['fecha']),
-      precio: json['precio'].toDouble(),
-      estado: json['estado'],
+      precio: (json['precio'] as num).toDouble(),
+      estado: json['estado'] ?? 'disponible',
       finalizada: json['finalizada'] ?? false,
-      contratista: json['contratista'],
-      camioneroAsignado: json['camioneroAsignado'],
+      contratista: contratistaId,
+      camioneroAsignado: camioneroId,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
       pesoCarga: json['pesoCarga'],

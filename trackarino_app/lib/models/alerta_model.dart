@@ -5,6 +5,7 @@ class AlertaSeguridad {
   final String usuario;
   final Map<String, double> coords;
   final DateTime timestamp;
+  final String? imagenUrl;
 
   AlertaSeguridad({
     this.id,
@@ -13,19 +14,45 @@ class AlertaSeguridad {
     required this.usuario,
     required this.coords,
     required this.timestamp,
+    this.imagenUrl,
   });
 
   factory AlertaSeguridad.fromJson(Map<String, dynamic> json) {
+    // Extraer usuario (puede ser String o Map)
+    String usuarioId;
+    if (json['usuario'] is String) {
+      usuarioId = json['usuario'];
+    } else if (json['usuario'] is Map) {
+      usuarioId = json['usuario']['_id'] ?? json['usuario']['id'] ?? 'desconocido';
+    } else {
+      usuarioId = 'desconocido';
+    }
+
+    // Extraer timestamp (puede ser timestamp o createdAt)
+    DateTime fechaCreacion;
+    try {
+      if (json.containsKey('timestamp') && json['timestamp'] != null) {
+        fechaCreacion = DateTime.parse(json['timestamp']);
+      } else if (json.containsKey('createdAt') && json['createdAt'] != null) {
+        fechaCreacion = DateTime.parse(json['createdAt']);
+      } else {
+        fechaCreacion = DateTime.now();
+      }
+    } catch (e) {
+      fechaCreacion = DateTime.now();
+    }
+
     return AlertaSeguridad(
-      id: json['_id'],
-      tipo: json['tipo'],
+      id: json['_id'] ?? json['id'],
+      tipo: json['tipo'] ?? 'otro',
       descripcion: json['descripcion'],
-      usuario: json['usuario'],
+      usuario: usuarioId,
       coords: {
-        'lat': json['coords']['lat'].toDouble(),
-        'lng': json['coords']['lng'].toDouble(),
+        'lat': (json['coords']['lat'] as num).toDouble(),
+        'lng': (json['coords']['lng'] as num).toDouble(),
       },
-      timestamp: DateTime.parse(json['timestamp']),
+      timestamp: fechaCreacion,
+      imagenUrl: json['imagenUrl'],
     );
   }
 

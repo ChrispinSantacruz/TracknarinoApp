@@ -38,7 +38,7 @@ class _PerfilCamioneroScreenState extends State<PerfilCamioneroScreen> {
   void initState() {
     super.initState();
     _selectedMetodoPago = widget.usuario?.metodoPago;
-    _isDisponible = widget.usuario?.isDisponible ?? false;
+    _cargarEstadoInicial();
     _cargarPerfilCamionero();
     
     // Inicializar estadísticas con datos del usuario si están disponibles
@@ -48,6 +48,17 @@ class _PerfilCamioneroScreenState extends State<PerfilCamioneroScreen> {
         _estadisticas['viajesCompletados'] = usuario.viajesCompletados ?? 0;
         _estadisticas['calificacionPromedio'] = usuario.calificacion ?? 0.0;
       }
+    }
+  }
+  
+  // Cargar estado inicial de disponibilidad
+  Future<void> _cargarEstadoInicial() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final disponible = await authService.obtenerEstadoDisponible();
+    if (mounted) {
+      setState(() {
+        _isDisponible = disponible;
+      });
     }
   }
   
@@ -81,15 +92,41 @@ class _PerfilCamioneroScreenState extends State<PerfilCamioneroScreen> {
   // Función para seleccionar una foto de perfil
   Future<void> _pickImage() async {
     try {
-      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      final pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      
       if (pickedFile != null) {
+        // En Flutter Web, usar Network/Memory image en lugar de File
+        final bytes = await pickedFile.readAsBytes();
+        
         setState(() {
+          // Guardar la ruta para referencia
           _profileImage = File(pickedFile.path);
         });
-        // Aquí iría el código para subir la imagen al servidor
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Imagen seleccionada. Funcionalidad de subida pendiente.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        
+        // TODO: Aquí iría el código para subir la imagen al servidor
+        // await _subirImagenAlServidor(bytes);
       }
     } catch (e) {
       debugPrint('Error al seleccionar imagen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al seleccionar imagen: $e')),
+        );
+      }
     }
   }
 
@@ -131,7 +168,10 @@ class _PerfilCamioneroScreenState extends State<PerfilCamioneroScreen> {
 
     try {
       final nuevoEstado = !_isDisponible;
-      // Aquí iría la llamada a la API para actualizar el estado
+      
+      // Guardar en AuthService
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.guardarEstadoDisponible(nuevoEstado);
       
       // Iniciar o detener el servicio de ubicación según disponibilidad
       final locationService = Provider.of<LocationService>(context, listen: false);
@@ -246,7 +286,7 @@ class _PerfilCamioneroScreenState extends State<PerfilCamioneroScreen> {
                           radius: 56,
                           backgroundImage: _profileImage != null 
                             ? FileImage(_profileImage!) as ImageProvider
-                            : const AssetImage('assets/default_profile.png'),
+                            : const AssetImage('assets/images/default_profile.png'),
                           backgroundColor: Colors.grey[200],
                           child: _profileImage == null 
                             ? Icon(

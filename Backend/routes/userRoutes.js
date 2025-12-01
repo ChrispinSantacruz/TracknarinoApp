@@ -80,6 +80,22 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Obtener perfil del usuario autenticado
+router.get('/perfil', verificarToken, async (req, res) => {
+  try {
+    const usuario = await User.findById(req.usuario.id).select('-contraseña');
+    
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json(usuario);
+  } catch (error) {
+    console.error('Error al obtener perfil:', error);
+    res.status(500).json({ error: 'Error al obtener perfil del usuario' });
+  }
+});
+
 // Actualizar el método de pago del usuario
 router.put('/actualizar-pago', verificarToken, async (req, res) => {
   const { metodoPago } = req.body;

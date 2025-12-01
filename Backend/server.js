@@ -33,21 +33,29 @@ const app = express();
 app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
-      'http://localhost:3000', 
+      'http://localhost:3000',
       'http://localhost:4000',
       'http://localhost:8000',
-      'http://localhost', 
-      'http://10.0.2.2:4000', 
+      'http://localhost',
+      'http://10.0.2.2:4000',
       'https://trackarino.com'
     ];
-    
-    // Permitir solicitudes sin origen (como aplicaciones móviles)
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log(`CORS bloqueó solicitud desde origen: ${origin}`);
-      callback(null, true); // Temporalmente permitir todos para desarrollo
+
+    // Permitir solicitudes sin origen (como aplicaciones móviles o herramientas como curl)
+    if (!origin) {
+      return callback(null, true);
     }
+
+    // Aceptar cualquier puerto en localhost o 127.0.0.1 para desarrollo
+    const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+    if (allowedOrigins.indexOf(origin) !== -1 || localhostRegex.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Bloquear y registrar el origen no permitido
+    console.warn(`CORS bloqueó solicitud desde origen: ${origin}`);
+    return callback(new Error('Origen no permitido por CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/oportunidad_model.dart';
 import '../../services/oportunidad_service.dart';
+import 'ruta_viaje_screen.dart';
 
 class OportunidadesScreen extends StatefulWidget {
   const OportunidadesScreen({super.key});
@@ -401,15 +402,79 @@ class _OportunidadesScreenState extends State<OportunidadesScreen> {
 
   // Función para aceptar una carga
   Future<void> _aceptarCarga(Oportunidad oportunidad) async {
+    // Mostrar diálogo de confirmación
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aceptar carga'),
+        content: Text('¿Estás seguro de que deseas aceptar la carga de ${oportunidad.origen} a ${oportunidad.destino}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
     try {
-      // Aquí iría la lógica para aceptar la carga, por ejemplo, enviar una solicitud al servidor
-      print('Carga aceptada: \\${oportunidad.titulo}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Carga aceptada exitosamente')),
+      // Mostrar indicador de carga
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
-    } catch (e) {
+
+      // Aceptar la carga en el backend
+      final oportunidadAceptada = await OportunidadService.aceptarOportunidad(oportunidad.id!);
+      
+      // Cerrar indicador de carga
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      // Mostrar mensaje de éxito
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al aceptar carga: \\${e.toString()}')),
+        const SnackBar(
+          content: Text('✅ Carga aceptada exitosamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navegar a la pantalla de ruta
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RutaViajeScreen(oportunidad: oportunidadAceptada),
+        ),
+      );
+
+      // Recargar oportunidades para eliminar la que fue aceptada
+      _cargarOportunidades();
+    } catch (e) {
+      // Cerrar indicador de carga si está abierto
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      // Mostrar error
+      String mensaje = 'Error al aceptar carga';
+      if (e.toString().contains('Ya tienes un viaje activo')) {
+        mensaje = 'Ya tienes un viaje activo. Finaliza tu viaje actual antes de aceptar otra carga.';
+      } else if (e.toString().contains('ya fue aceptada')) {
+        mensaje = 'Esta oportunidad ya fue aceptada por otro camionero.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensaje),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

@@ -1,30 +1,40 @@
 function soloRol(rol) {
   return (req, res, next) => {
-    console.log(`Verificando rol: requerido=${rol}, actual=${req.usuario.tipoUsuario}`);
+    // Soportar tanto 'tipo' como 'tipoUsuario' en el token
+    const rolUsuario = req.usuario.tipoUsuario || req.usuario.tipo;
+    
+    console.log(`Verificando rol: requerido=${rol}, actual=${rolUsuario}`);
+    
+    if (!rolUsuario) {
+      console.log('Acceso denegado: No se encontró el rol del usuario en el token');
+      return res.status(403).json({ 
+        mensaje: 'Acceso denegado: Rol no encontrado en token'
+      });
+    }
     
     // Si se pasa un array de roles, verificar si el usuario tiene alguno de ellos
     if (Array.isArray(rol)) {
-      if (!rol.includes(req.usuario.tipoUsuario)) {
-        console.log(`Acceso denegado: El usuario con rol ${req.usuario.tipoUsuario} no tiene uno de los roles permitidos: ${rol.join(', ')}`);
+      if (!rol.includes(rolUsuario)) {
+        console.log(`Acceso denegado: El usuario con rol ${rolUsuario} no tiene uno de los roles permitidos: ${rol.join(', ')}`);
         return res.status(403).json({ 
           mensaje: 'Acceso denegado: Rol insuficiente',
           rolesPermitidos: rol,
-          rolActual: req.usuario.tipoUsuario
+          rolActual: rolUsuario
         });
       }
     } else {
       // Si se pasa un solo rol, verificar si el usuario lo tiene
-      if (req.usuario.tipoUsuario !== rol) {
-        console.log(`Acceso denegado: El usuario con rol ${req.usuario.tipoUsuario} no tiene el rol requerido: ${rol}`);
+      if (rolUsuario !== rol) {
+        console.log(`Acceso denegado: El usuario con rol ${rolUsuario} no tiene el rol requerido: ${rol}`);
         return res.status(403).json({ 
           mensaje: 'Acceso denegado: Rol insuficiente',
           rolRequerido: rol,
-          rolActual: req.usuario.tipoUsuario
+          rolActual: rolUsuario
         });
       }
     }
     
-    console.log(`Usuario con rol ${req.usuario.tipoUsuario} autorizado`);
+    console.log(`Usuario con rol ${rolUsuario} autorizado`);
     next();
   };
 }
